@@ -15,8 +15,8 @@ logs/
 # IDE junk
 # ======================
 __pycache__/
-.ipynb_checkpoints/
-.vscode/
+*.ipynb_checkpoints/
+*.vscode/
 *.ipynb
 
 # ======================
