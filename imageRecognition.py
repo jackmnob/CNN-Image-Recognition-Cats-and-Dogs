@@ -13,10 +13,10 @@ https://www.kaggle.com/datasets/samuelcortinhas/cats-and-dogs-image-classificati
 
 Purpose of Analysis:
 
-- Solve a simple binary image classification problem by using an images' pixel data to determine the 
+- Solve a simple binary image classification problem by using an images' pixel data to determine the
 correct classification (cat or dog) of a given image.
 
-- Develop a Convolution Neural Network model (CNN) that can accurately predict future images 
+- Develop a Convolution Neural Network model (CNN) that can accurately predict future images
 by learning from a subset of image metadata.
 
 Now, let's begin!
@@ -143,7 +143,7 @@ def initialize_directory():
     # Use pandas (and our directory_path path variable) to read our directory and list the subfolders
     folder_list = []  # Initialize an empty list to store the names of each directory object
 
-    # Loop over each folder in the directory (using os.listdir()) 
+    # Loop over each folder in the directory (using os.listdir())
     for folder in os.listdir(directory_path):
         folder_list.append(folder)  # Append the name of each folder to our folder_list variable
     print('List of folders in the directory: ' + str(folder_list))
@@ -360,7 +360,7 @@ def transform_images():
     print('Testing images will be converted to RGB, resized to '
         + str(image_size) + 'x'
         + str(image_size) + 'px, normalized, and converted to tensors when loaded.')
-    
+
     return train_transform, test_transform
 
 # Call the function to define the image transformations for training and testing datasets
@@ -650,4 +650,4 @@ try:
 except Exception as ex:
     # Print an error message if any occur
     print('Error occurred during model evaluation: ' + str(ex))
-# %%
+
