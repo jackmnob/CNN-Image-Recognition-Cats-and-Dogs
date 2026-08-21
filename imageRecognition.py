@@ -23,7 +23,6 @@ Now, let's begin!
 """
 
 # ===================== Modules Setup =====================
-# Read in the required modules and change our default pandas settings:
 try:  #  Use the "try" flow control argument to "try" and import all necessary packages
     # Basic operating system packages
     # 'os' - Provides functions for interacting with the operating system
@@ -57,7 +56,7 @@ try:  #  Use the "try" flow control argument to "try" and import all necessary p
     # 'Image' - Opens, reads, and manipulates image files
     from PIL import Image
     # 'DataLoader' - Loads datasets into batches for efficient model training and testing
-    from torch.utils.data import DataLoader
+    from torch.utils.data import DataLoader, Subset
     # ????
     import torch.nn as nn
     # ????
@@ -117,89 +116,66 @@ def configure_pd_display():
     except Exception as ex:
         print('Unexpected error occurred while configuring display settings: ' + str(ex))
 
-# Call the function to configure pandas display settings
-configure_pd_display()
-
 # ===================== Directory Initialization =====================
 def initialize_directory():
-    """Initializes the directory path for the dataset and checks if it exists:
-    - Attempts to locate the directory of the dataset using the provided path
-    - If the directory is found, it lists the subfolders and establishes paths for training and testing datasets
+    """Initializes the dataset directory and creates the training/testing paths.
+
+    This function:
+    - Defines the main dataset directory
+    - Confirms that the main directory exists
+    - Lists the folders contained inside the directory
+    - Creates explicit paths for the training and testing datasets
+    - Confirms that the expected training and testing folders exist
+
+    Args:
+        var = None (this function does not take any arguments)
+
     Returns:
-        var = A variable containing the directory path, training path, testing path, and list of folders.
+        var = "directory_path" (the main dataset directory)
+        var = "train_path" (the path to the training dataset)
+        var = "test_path" (the path to the testing dataset)
+        var = "folder_list" (a list of folders contained in the main dataset directory)
     """
     # Initialize our directory path where the dataset is stored:
     directory_path = r'C:\Users\jackn\Desktop\Projects\Portfolio\ML\Image Recognition\data'
 
     # Attempt to locate the *directory* of the dataset (using os.path.isdir()) via the provided path (located above)
     if not os.path.isdir(directory_path):
-        # Print an error message for our user if the file path is NOT found (concatenate our filePath variable to str())
-        print('Error - the directory at: ' + directory_path + ' was not found!')
+        # Raise a FileNotFoundError for our user if the file path is NOT found
+        raise FileNotFoundError('Error - the directory at: ' + directory_path + ' was not found!')
     # Otherwise, if our file is located:
     else:
         # Print our success message for user feedback
         print('Directory successfully located.')
 
-    # Use pandas (and our directory_path path variable) to read our directory and list the subfolders
-    folder_list = []  # Initialize an empty list to store the names of each directory object
+    # Store the names of all folders contained in the dataset directory
+    folder_list = []
 
     # Loop over each folder in the directory (using os.listdir())
     for folder in os.listdir(directory_path):
-        folder_list.append(folder)  # Append the name of each folder to our folder_list variable
+        # Build the full path to the current object
+        folder_path = os.path.join(directory_path, folder)
+        # Only add the object if it is actually a directory
+        if os.path.isdir(folder_path):
+            folder_list.append(folder)
     print('List of folders in the directory: ' + str(folder_list))
 
-    # Establish the directory paths together
-    train_path = os.path.join(directory_path, folder_list[1])
-    test_path = os.path.join(directory_path, folder_list[0])
+    # Create explicit paths for the training and testing directories
+    train_path = os.path.join(directory_path, 'train')
+    test_path = os.path.join(directory_path, 'test')
+
+    # Confirm that the expected training folder exists
+    if not os.path.isdir(train_path):
+        raise FileNotFoundError('The training directory was not found at: ' + train_path)
+
+    # Confirm that the expected testing folder exists
+    if not os.path.isdir(test_path):
+        raise FileNotFoundError('The testing directory was not found at: ' + test_path)
 
     # Print the paths of the folders within the directory
-    print(train_path + '\n' + test_path)
+    print("Training directory: " + train_path + '\n' + "Testing directory: " + test_path)
 
     return directory_path, train_path, test_path, folder_list
-
-# Call the function to initialize our directory and store the returned variables
-directory_path, train_path, test_path, folder_list = initialize_directory()
-
-# ===================== EDA: Viewing Image Samples =====================
-"""
-# %%
-# Set the directories for the training set on each category
-cat_folder = os.path.join(train_path, 'cats')
-dog_folder = os.path.join(train_path, 'dogs')
-
-
-# Initialize an empty list to store the filepaths of each sample
-sample_paths = []
-
-# Grab three samples from the training set (for cats)
-for file in os.listdir(cat_folder)[:3]:
-    sample_paths.append(os.path.join(cat_folder, file))
-
-# Grab three samples from the training set (for dogs)
-for file in os.listdir(dog_folder)[:3]:
-    sample_paths.append(os.path.join(dog_folder, file))
-
-# Create a subplot area with 2 vertical axes, and three horizontal
-fig, axes = plt.subplots(2, 3, figsize=(10, 6))
-
-# For each image in the range of sample images (3)
-for image in range(len(sample_paths)):
-    # Open the image from the path
-    img = Image.open(sample_paths[image])
-    # Display the image on the axis (.imshow())
-    axes[image // 3, image % 3].imshow(img)
-    axes[image // 3, image % 3].axis('off')
-# Show the plot of images
-plt.show()
-# %%
-"""
-
-# ===================== EDA: Checking for Class Imbalances =====================
-# Check how many images exist in each set of our data (class imbalances)
-print("Train Cats: " + str(len(os.listdir(train_path + '\\cats'))))  # Check the training set
-print("Train Dogs: " + str(len(os.listdir(train_path + '\\dogs'))))
-print("Test Cats: " + str(len(os.listdir(test_path + '\\cats'))))    # Check the testing set
-print("Test Dogs: " + str(len(os.listdir(test_path + '\\dogs'))))
 
 # ===================== EDA: Analyzing Image Metadata =====================
 def image_quality_check(train_path):
@@ -271,41 +247,6 @@ def image_quality_check(train_path):
     print('Mean Height: ' + str(round(np.mean(heights), 2)))
     print('Median Height: ' + str(round(np.median(heights), 2)))
 
-# Call the function to perform the image quality check and store the returned metadata
-image_quality_check(train_path)
-
-# ===================== EDA: Analyzing Image Metadata (Sizing/Pixel Map) =====================
-"""
-# %%
-# Visualize pixel distribution across the dataset (training set)
-fig, axes = plt.subplots(1, 2, figsize=(8, 4))  # Create a figure area with 1 row and 2 columns
-
-# Width distribution (first column on the plot area)
-axes[0].hist(widths, bins=20, color='black')
-axes[0].axvline(np.mean(widths), color='red', linestyle='--', linewidth=2, label='Mean')
-axes[0].axvline(np.median(widths), color='green', linestyle='-.', linewidth=2,label='Median')
-axes[0].set_title('Training Set: Image Width Distribution')
-axes[0].set_xlabel('Width (pixels)')
-axes[0].set_ylabel('Frequency')
-axes[0].legend()
-
-# Height distribution (first column on the plot area)
-axes[1].hist(heights, bins=20, color='black')
-axes[1].axvline(np.mean(heights), color='red', linestyle='--', linewidth=2, label='Mean')
-axes[1].axvline(np.median(heights), color='green', linestyle='-.', linewidth=2, label='Median')
-axes[1].set_title('Training Set: Image Height Distribution')
-axes[1].set_xlabel('Height (pixels)')
-axes[1].set_ylabel('Frequency')
-axes[1].legend()
-
-# Prevent overlap
-plt.tight_layout()
-
-# Display plots
-plt.show()
-# %%
-"""
-
 # ===================== Pre-Processing: Image Standardization =====================
 # Define a function to convert images to RGB format (if needed)
 def convert_to_rgb(image):
@@ -318,12 +259,18 @@ def convert_to_rgb(image):
     return image.convert('RGB')
 
 def transform_images():
-    """ Define the image transformations for training and testing datasets:
+    """ Define the image transformations for training, validation, and testing datasets:
+    Training images:
     - Resize all images to a standard size (e.g., 128x128 pixels)
-    - Convert images to RGB format (if needed)
+    - Convert images to RGB format
     - Augment training images with random horizontal flips and rotations
     - Normalize pixel values to a standard range (e.g., 0 to 1 or -1 to 1)
     - Convert images to PyTorch tensors for CNN model input
+
+    Validation/testing images:
+    - Same process but WITHOUT random augmentations (to ensure consistent evaluation)
+
+
     Args:
         var = None (this function does not take any arguments)
     Returns:
@@ -331,168 +278,365 @@ def transform_images():
         var = "test_transform" (the image transformations to apply to the testing dataset)
     """
     # Now, let's standardize our image dimensions:
-    image_size = 128  # Set to 128x128 pixels
+    training_image_size = 128  # Set to 128x128 pixels
+    evaluation_image_size = 144  # Set to 144x144 pixels
 
     # Set any images in the training set to RGB, augment them, resize them, normalize them, and turn them into Tensors
     train_transform = transforms.Compose([
         transforms.Lambda(convert_to_rgb),
+        # Randomly modify image brightness, contrast, and saturation to expose the CNN to slightly different versions of each image
+        transforms.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15),
+        # Randomly crop and resize portions of the image while maintaining aspect ratio
+        transforms.RandomResizedCrop(size=training_image_size, scale=(0.75, 1.0), ratio=(0.85, 1.15)),
+        # Randomly mirror approximately 50% of training images horizontally
         transforms.RandomHorizontalFlip(p=0.5),
+        # Randomly rotate images between approximately -10 and +10 degrees
         transforms.RandomRotation(10),
-        transforms.Resize((image_size, image_size)),
+        # Convert images into PyTorch tensors
         transforms.ToTensor(),
+        # Normalize RGB pixel values to a range of -1 to 1 (mean=0.5, std=0.5 for each channel)
         transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
     ])
 
     print('Training images will be converted to RGB, resized to '
-        + str(image_size)
-        + 'x'
-        + str(image_size)
-        + 'px, normalized, and converted to tensors when loaded.')
+        + str(training_image_size) + 'x'
+        + str(training_image_size) + 'px, normalized, and converted to tensors when loaded.')
 
     # Set any images in the testing set to RGB, resize them, normalize them, and turn them into Tensors
-    test_transform = transforms.Compose([
+    evaluation_transform = transforms.Compose([
+        # Convert any non-RGB images into RGB format
         transforms.Lambda(convert_to_rgb),
-        transforms.Resize((image_size, image_size)),
+        # Resize images slightly larger than the CNN input dimensions
+        transforms.Resize((evaluation_image_size, evaluation_image_size)),
+        # Crop the center 128x128 pixels
+        transforms.CenterCrop(training_image_size),
+        # Convert images into PyTorch tensors
         transforms.ToTensor(),
+        # Same normalization used on training images (RGB pixel values from: -1 to 1 (mu=0.5, st.dev=0.5 for each channel)
         transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
     ])
 
-    print('Testing images will be converted to RGB, resized to '
-        + str(image_size) + 'x'
-        + str(image_size) + 'px, normalized, and converted to tensors when loaded.')
+    print('Evaluation images will be converted to RGB, cropped, and resized to '
+        + str(training_image_size) + 'x'
+        + str(training_image_size) + 'px without random augmentation (rotation/flipping).')
 
-    return train_transform, test_transform
+    return train_transform, evaluation_transform
 
-# Call the function to define the image transformations for training and testing datasets
-train_transform, test_transform = transform_images()
+# ===================== Pre-Processing: Dataset Loading and Splitting =====================
+def load_and_split_data(train_path, test_path, train_transform, evaluation_transform, validation_size=0.15, random_state=42):
+    """Loads the image datasets and splits the training data into separate training and validation subsets.
 
-def load_and_transform_data(train_path, test_path, train_transform, test_transform):
-    """Loads the training and testing datasets using PyTorch's ImageFolder class, applying the defined transformations:
-        Args:
-            var = "train_path" (the file path to the training dataset)
-            var = "test_path" (the file path to the testing dataset)
-            var = "train_transform" (the image transformations to apply to the training dataset)
-            var = "test_transform" (the image transformations to apply to the testing dataset)
-        Returns:
-            var = "train_dataset" (the loaded and transformed training dataset)
-            var = "test_dataset" (the loaded and transformed testing dataset)
+    This function:
+    - Reads image paths and class labels from the training directory
+    - Splits the training data into training and validation indices
+    - Uses stratification to preserve the cat/dog class distribution
+    - Applies random augmentation only to the training images
+    - Applies deterministic preprocessing to validation and testing images
+    - Keeps the testing directory completely separate
+
+    Args:
+        var = "train_path" (the file path to the training dataset)
+        var = "test_path" (the file path to the testing dataset)
+        var = "train_transform" (random transformations applied to training images)
+        var = "evaluation_transform" (non-random transformations applied to validation/testing images)
+        var = "validation_size" (the percentage of training data assigned to validation)
+        var = "random_state" (the random seed used to reproduce the same split)
+
+    Returns:
+        var = "train_dataset" (the final training subset)
+        var = "validation_dataset" (the final validation subset)
+        var = "test_dataset" (the separate testing dataset)
+        var = "class_names" (the image class names)
+        var = "class_to_idx" (the numerical mapping assigned to each class)
     """
-    #  Use the "try" flow control argument to "try" and import all necessary packages
+
     try:
-        # Load the datasets
-        train_dataset = ImageFolder(root=train_path, transform=train_transform)  # training
-        print('Training dataset successfully loaded.')
-        test_dataset = ImageFolder(root=test_path, transform=test_transform)     # testing
-        print('Testing dataset successfully loaded.')
-    #  Use an "except" clause to catch any unexpected errors
+        # Load the original training directory without transformations.
+        #
+        # This version is used only to obtain:
+        # - The complete list of image observations
+        # - The numerical class label assigned to each image
+        base_train_dataset = ImageFolder(root=train_path)
+
+        # Store the numerical class labels assigned by ImageFolder: cats = 0, dogs = 1
+        targets = np.array(base_train_dataset.targets)
+
+        # Create an array containing the index of every image in the original training directory.
+        # Example: [0, 1, 2, 3, ..., 556]
+        all_indices = np.arange(len(base_train_dataset))
+
+        # Split the original training indices into separate training and validation groups.
+        # test_size=validation_size: Sends 15% of the original training images to validation when validation_size is set to 0.15.
+        # stratify=targets: Preserves approximately the same cat/dog percentage in both the training and validation subsets.
+        # random_state: Produces the same split every time the program runs for development purposes.
+        train_indices, validation_indices = train_test_split(
+            all_indices, test_size=validation_size,
+            random_state=random_state,stratify=targets
+            )
+
+        # Load the original training directory with random training augmentation enabled.
+        train_dataset_full = ImageFolder(root=train_path, transform=train_transform)
+
+        # Load the same original training directory again using deterministic evaluation transformations.
+        # This prevents validation images from receiving random rotation, flipping, cropping, or color augmentation.
+        validation_dataset_full = ImageFolder(root=train_path, transform=evaluation_transform)
+
+        # Create the final training subset using only the indices assigned to training.
+        train_dataset = Subset(train_dataset_full, train_indices)
+
+        # Create the final validation subset using only the indices assigned to validation.
+        validation_dataset = Subset(validation_dataset_full, validation_indices)
+
+        # Load the completely separate testing directory using deterministic evaluation transformations.
+        #
+        # The test dataset is not involved in training, model selection, or early stopping.
+        test_dataset = ImageFolder(root=test_path, transform=evaluation_transform)
+
+        # Store the class names and numerical mappings before returning.
+        # These are stored separately because PyTorch Subset objects do not directly provide .classes or .class_to_idx attributes.
+        class_names = base_train_dataset.classes
+        class_to_idx = base_train_dataset.class_to_idx
+
+        print('Training, validation, and testing datasets successfully loaded.')
+
+        return(train_dataset, validation_dataset, test_dataset, class_names, class_to_idx)
+    # Raise the original error instead of only printing a message.
     except Exception as ex:
-        print('Error loading datasets.')
+        # This prevents later sections from trying to use datasets that were never successfully created.
+        raise RuntimeError('Error occurred while loading and splitting the datasets: ' + str(ex))
 
-    return train_dataset, test_dataset
+# Now, let's define our CNN model architecture from scratch (using PyTorch's nn.Module class):
+class ImprovedCNN(nn.Module):
+    """Creates an improved Convolutional Neural Network (CNN) for binary image classification.
 
-# Call the function to load and transform the datasets
-train_dataset, test_dataset = load_and_transform_data(train_path, test_path, train_transform, test_transform)
+    This CNN is designed to classify images as either cats or dogs.
 
-## -- -- ================== MORE EDITS NEEDED BELOW ================== -- -- ##
-## ================== -- --  ================== -- -- ================ -- -- ##
-# Check how PyTorch interpreted the image classes
-print('Training classes: ' + str(train_dataset.classes))
-print('Testing classes: ' + str(test_dataset.classes) + '\n')
+    The model contains:
+    - Four convolutional layers for learning increasingly complex image features
+    - Batch normalization layers to stabilize and improve training
+    - Max-pooling layers to reduce the spatial dimensions of the feature maps
+    - Adaptive average pooling to summarize each final feature map into one value
+    - A fully connected layer for combining the learned image features
+    - Dropout to reduce overfitting
+    - A final output layer containing one raw prediction score for each class
 
-# Check how PyTorch numerically encoded the classes
-print('Training class mapping: ' + str(train_dataset.class_to_idx))
-print('Testing class mapping: ' + str(test_dataset.class_to_idx) + '\n')
+    Expected input shape:
+        [batch_size, 3, 128, 128]
 
-# Check the number of images loaded into each dataset
-print('Training images loaded: ' + str(len(train_dataset)) + '\n')
-print('Testing images loaded: ' + str(len(test_dataset)) + '\n')
+    Expected output shape:
+        [batch_size, 2]
+    """
 
-# Pull one transformed image and label from the training dataset
-sample_image, sample_label = train_dataset[0]
+    # Define the structure and layers of the neural network
+    def __init__(self):
 
-# Display the transformed image shape and label
-print('Sample image tensor shape: ' + str(sample_image.shape))
-print('Sample image label: ' + str(sample_label))
+        # Initialize the parent PyTorch neural network class
+        super(ImprovedCNN, self).__init__()
 
-# Set the batch size for model training
+        # Convolutional layers apply learnable filters to images:
+        #
+        # Early convolutional layers may learn simple features such as:
+        # - Vertical edges or horizontal edges, curves, and color transitions
+        #
+        # Deeper convolutional layers can combine those simpler features into more complex patterns such as:
+        # - Fur textures, eyes, ears, whiskers, noses, and face/body shapes
+        #
+        # The learned outputs of convolutional layers are called feature maps.
+
+        # First convolutional layer:
+        # Input = 3 RGB color channels
+        # Output = 32 learned feature maps
+        #
+        # Padding of 1 keeps the image dimensions at 128x128 after convolution.
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, padding=1)
+
+        # First batch normalization layer (Normalizes the 32 feature maps produced by conv1):
+        # Batch normalization can:
+        # - Make training more stable, and faster, and reduce sensitivity to the initial model weights
+        self.bn1 = nn.BatchNorm2d(32)
+
+        # Second convolutional layer (input = 32 feature maps, output = 64 feature maps):
+        # This layer can combine simple features learned by conv1
+        # into more detailed patterns such as fur, curves, and small shapes.
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
+
+        # Second batch normalization layer (normalizes the 64 feature maps produced by conv2):
+        self.bn2 = nn.BatchNorm2d(64)
+
+        # Third convolutional layer (input = 64 feature maps, output = 128 feature maps):
+        # This deeper layer can combine earlier patterns into more meaningful
+        # animal features such as eyes, ears, noses, and facial structures.
+        self.conv3 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
+
+        # Third batch normalization layer (Normalizes the 128 feature maps produced by conv3):
+        self.bn3 = nn.BatchNorm2d(128)
+
+        # Fourth convolutional layer (input = 128 feature maps, output = 256 feature maps):
+        # This layer can learn higher-level combinations of features that may
+        # help distinguish the overall appearance of cats from dogs.
+        self.conv4 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1)
+
+        # Fourth batch normalization layer (normalizes the 256 feature maps produced by conv4):
+        self.bn4 = nn.BatchNorm2d(256)
+
+        # Max-pooling layer (reduces the height and width of each feature map by half):
+        # For example: 128x128 -> 64x64, then 64x64 -> 32x32, then 32x32 -> 16x16, then 16x16 -> 8x8
+
+        # Pooling reduces computation while retaining the strongest or most important detected features.
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        # Adaptive average pooling layer (reduces every final 8x8 feature map into a single average value):
+        # Before adaptive pooling: [batch_size, 256, 8, 8] after adaptive pooling: [batch_size, 256, 1, 1]
+        # This prevents the model from needing a very large fully connected layer containing millions of parameters.
+        self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
+
+        # First fully connected layer (receives one summarized value from each of the 256 feature maps):
+        # Input = 256 learned image features, output = 128 combined features
+        self.fc1 = nn.Linear(in_features=256,out_features=128)
+
+        # Dropout layer (randomly disables 40% of the 128 values during each training pass):
+        # This reduces the model's ability to memorize the training images and can improve performance on new, unseen images.
+        # Dropout is active during model.train(), but is automatically disabled during model.eval().
+        self.dropout = nn.Dropout(p=0.4)
+
+        # Final output layer:
+        # Input = 128 values from the previous fully connected layer, output = 2 raw prediction scores, called "logits"
+        # One score represents the cat class, one score represents the dog class
+        #
+        # A Softmax layer is not required here because CrossEntropyLoss internally handles the necessary probability calculations.
+        self.fc2 = nn.Linear(in_features=128, out_features=2)
+
+    # Define how images move through the neural network from input to prediction
+    def forward(self, x):
+        """
+        Performs the forward pass through the CNN.
+
+        Args:
+        x: A batch of image tensors with the shape: [batch_size, 3, 128, 128]
+
+        Returns:
+        x: A tensor containing two raw class prediction scores for each image, with the shape: [batch_size, 2]
+        """
+
+        # First convolutional block (convolution -> batch normalization -> ReLU activation -> pooling):
+        # Input shape: [batch_size, 3, 128, 128]
+        # After conv1: [batch_size, 32, 128, 128]
+        # After pooling: [batch_size, 32, 64, 64]
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = F.relu(x)
+        x = self.pool(x)
+
+        # Second convolutional block (convolution -> batch normalization -> ReLU activation -> pooling):
+        # Input shape: [batch_size, 32, 64, 64]
+        # After conv2: [batch_size, 64, 64, 64]
+        # After pooling: [batch_size, 64, 32, 32]
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = F.relu(x)
+        x = self.pool(x)
+
+        # Third convolutional block (convolution -> batch normalization -> ReLU activation -> pooling):
+        # Input shape: [batch_size, 64, 32, 32]
+        # After conv3: [batch_size, 128, 32, 32]
+        # After pooling: [batch_size, 128, 16, 16]
+        x = self.conv3(x)
+        x = self.bn3(x)
+        x = F.relu(x)
+        x = self.pool(x)
+
+        # Fourth convolutional block (convolution -> batch normalization -> ReLU activation -> pooling):
+        # Input shape: [batch_size, 128, 16, 16]
+        # After conv4: [batch_size, 256, 16, 16]
+        # After pooling: [batch_size, 256, 8, 8]
+        x = self.conv4(x)
+        x = self.bn4(x)
+        x = F.relu(x)
+        x = self.pool(x)
+
+        # Global average pooling (e.g., calculate one average value for each of the 256 feature maps):
+        # Shape changes from: [batch_size, 256, 8, 8] to [batch_size, 256, 1, 1]
+        x = self.global_pool(x)
+
+        # Flatten the pooled feature maps into one vector per image:
+        # Shape changes from: [batch_size, 256, 1, 1] to [batch_size, 256]
+        # torch.flatten(x, 1) preserves dimension 0, which is the batch size, and flattens every dimension after it.
+        x = torch.flatten(x, start_dim=1)
+
+        # Fully connected layer (learns combinations of the 256 summarized image features):
+        # Shape changes from: [batch_size, 256] to [batch_size, 128]
+        x = self.fc1(x)
+
+        # Apply the ReLU activation function:
+        # Converts negative values to zero while keeping positive values.
+        # This introduces nonlinearity so the network can learn more complex
+        # relationships than a sequence of purely linear transformations.
+        x = F.relu(x)
+
+        # Apply dropout (randomly disables 40% of the values during training to help reduce overfitting.):
+        # The shape remains: [batch_size, 128]
+        x = self.dropout(x)
+
+        # Final output layer (returns two raw prediction scores for each image):
+        # Shape changes from: [batch_size, 128] to [batch_size, 2]
+        # The class with the larger score becomes the predicted class!
+        x = self.fc2(x)
+
+        return x
+
+# Call the function to configure pandas display settings
+configure_pd_display()
+
+# Call the function to initialize our directory and store the returned variables
+directory_path, train_path, test_path, folder_list = initialize_directory()
+
+# ===================== EDA: Checking for Class Imbalances =====================
+# Check how many images exist in each set of our data (class imbalances)
+print("Train Cats: " + str(len(os.listdir(train_path + '\\cats'))))  # Check the training set
+print("Train Dogs: " + str(len(os.listdir(train_path + '\\dogs'))))
+print("Test Cats: " + str(len(os.listdir(test_path + '\\cats'))))    # Check the testing set
+print("Test Dogs: " + str(len(os.listdir(test_path + '\\dogs'))))
+
+# Perform the image quality check with the function and store the returned metadata
+image_quality_check(train_path)
+
+# Define the image transformations with the function for training and testing datasets
+train_transform, evaluation_transform = transform_images()
+
+# Load the datasets and split the original training data
+train_dataset, validation_dataset, test_dataset, class_names, class_to_idx = load_and_split_data(
+    train_path=train_path, test_path=test_path, train_transform=train_transform,
+    evaluation_transform=evaluation_transform, validation_size=0.15, random_state=42)
+
+# Set the number of images processed in each batch
 batch_size = 32
 
 # Create the training DataLoader
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
+# Create the validation DataLoader
+validation_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False)
+
 # Create the testing DataLoader
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-# Confirm the DataLoaders were created
+# Confirm that the DataLoaders were created
 print('Training DataLoader created with batch size: ' + str(batch_size))
+print('Validation DataLoader created with batch size: ' + str(batch_size))
 print('Testing DataLoader created with batch size: ' + str(batch_size))
 
-# Pull the first batch of images and labels from the training set (DataLoader object)
-for images, labels in train_loader:
-    print('Successfully loaded first batch!' + '\n')
-    break
-
-# Image batch shape format: [Batch Size, Color Channels, Image Height, Image Width]
-print('Image batch shape: ' + str(images.shape) + '\n')
-print('Label batch shape: ' + str(labels.shape))
-
-# Now, let's define our CNN model architecture from scratch (using PyTorch's nn.Module class).:
-class SimpleCNN(nn.Module):  # Create a basic CNN model from scratch
-
-    # Define the structure/layers of the neural network
-    def __init__(self):
-
-        # Initialize the parent PyTorch neural network class
-        super(SimpleCNN, self).__init__()
-
-        # Convolutional layers apply filters to images.
-        # Example: one filter may detect vertical edges, another may detect horizontal edges, another may detect curves, and another may detect dark/light transitions.
-        # These learned filters create "feature maps" that help the model recognize cats vs dogs.
-
-        # First convolutional layer: (input = 3 RGB channels; Output = 16 feature maps)
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, padding=1)
-
-        # Second convolutional layer: (this layer can combine simpler features into more complex patterns like eyes, ears, fur, etc.)
-        # Input = 16 feature maps, Output = 32 feature maps.
-        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1)
-
-        # Pooling layer reduces image dimensions by half each time it is applied (ex: 128x128 -> 64x64 -> 32x32)
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-
-        # Fully connected layer: (after two pooling steps, image size is 32x32 with 32 feature maps - *see above explanation*)
-        # 32 feature maps * 32 height * 32 width = 32,768 input values.
-        self.fc1 = nn.Linear(32 * 32 * 32, 128)
-
-        # Output layer: (2 outputs because this is a binary classification problem - e.g., cats vs dogs.)
-        self.fc2 = nn.Linear(128, 2)
-
-    # Define how images move through the network from input to prediction:
-    def forward(self, x):
-
-        # First block: convolution -> ReLU activation -> pooling (shape changes from [batch size, 3, 128, 128] to [batch size, 16, 64, 64])
-        x = self.pool(F.relu(self.conv1(x)))
-
-        # Second block: convolution -> ReLU activation -> pooling (shape changes from [batch size, 16, 64, 64] to [batch size, 32, 32, 32])
-        x = self.pool(F.relu(self.conv2(x)))
-
-        # Flatten the feature maps into one long vector before the dense layers (shape changes from [batch size, 32, 32, 32] to [batch size, 32768])
-        x = x.view(x.size(0), -1)
-
-        # First dense layer learns combinations of the extracted image features
-        x = F.relu(self.fc1(x))
-
-        # Final dense layer returns 2 raw prediction scores, one for each class
-        x = self.fc2(x)
-
-        return x
-
-print('CNN class and feed-forward function successfully defined.')
+# Display the dataset information
+print('Image classes: ' + str(class_names))
+print('Class mapping: ' + str(class_to_idx))
+print('Training images loaded: ' + str(len(train_dataset)))
+print('Validation images loaded: ' + str(len(validation_dataset)))
+print('Testing images loaded: ' + str(len(test_dataset)))
 
 # Set the device to GPU if available, otherwise CPU
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Create the CNN model and send it to the device
-model = SimpleCNN().to(device)
+model = ImprovedCNN().to(device)
 
 # Confirm where the model is stored
 print('Model created and sent to: ' + str(device))
@@ -503,18 +647,14 @@ print(model)
 # Define the loss function ('CrossEntropyLoss' is commonly used for classification - though, usually multi-class problems.)
 criterion = nn.CrossEntropyLoss()
 
-# Define the optimizer
-# Adam updates the model weights during training.
+# Define the optimizer (Adam updates the model weights during training.)
 learning_rate = 0.001
-
-optimizer = torch.optim.Adam(
-    model.parameters(),
-    lr=learning_rate
-)
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.0001)
 
 print('Loss function defined: CrossEntropyLoss')
-print('Optimizer defined: Adam')
+print('Optimizer defined: AdamW')
 print('Learning rate: ' + str(learning_rate))
+print('Weight decay: ' + str(0.0001))
 
 # Set the number of full passes through the training dataset
 num_epochs = 20
@@ -558,7 +698,7 @@ for epoch in range(num_epochs):
 
     print('Epoch ' + str(epoch + 1) + '/' + str(num_epochs) + ' - Loss: ' + str(round(average_loss, 4)))
 
-    # Set model to evaluation mode
+# Set model to evaluation mode
 model.eval()
 
 # Initialize counters for correct predictions and total observations
@@ -627,10 +767,7 @@ try:
     cm = confusion_matrix(y_test, y_pred)
 
     # Create the confusion matrix display
-    cm_display = ConfusionMatrixDisplay(
-        confusion_matrix=cm,
-        display_labels=train_dataset.classes
-    )
+    cm_display = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
 
     # Plot the confusion matrix
     cm_display.plot()
@@ -650,4 +787,3 @@ try:
 except Exception as ex:
     # Print an error message if any occur
     print('Error occurred during model evaluation: ' + str(ex))
-
