@@ -656,134 +656,249 @@ print('Optimizer defined: AdamW')
 print('Learning rate: ' + str(learning_rate))
 print('Weight decay: ' + str(0.0001))
 
-# Set the number of full passes through the training dataset
-num_epochs = 20
+# ===================== Model Training: (with early stopping) =====================
+# Set the maximum number of complete passes through the training dataset.
+num_epochs = 50
 
-# Train the CNN model
+# Set the number of consecutive epochs that validation loss is allowed to remain unimproved before training is stopped.
+early_stopping_patience = 15
+
+# Track the highest validation accuracy observed during training:
+# Start with zero because the first calculated validation accuracy will always be higher than this value.
+best_validation_accuracy = 0.0
+# Start with infinity because the first calculated validation loss will always be lower than this value.
+best_validation_loss = float('inf')
+
+# Track how many consecutive epochs have passed without improving validation accuracy.
+epochs_without_improvement = 0
+
+# Store the model weights from the epoch that produced the highest validation accuracy.
+best_model_weights = None
+
+# ===================== Model Training Loop =====================
+
+# Train the CNN for a maximum of num_epochs.
 for epoch in range(num_epochs):
 
-    # Set model to training mode
+    # ===================== Training Phase =====================
+
+    # Set the CNN to training mode - this enables training-specific behavior such as:
+    # - Dropout (randomly disables a percentage of neurons to reduce overfitting)
+    # - BatchNorm (updates its running statistics based on the current batch of data)
     model.train()
 
-    # Track total loss for the current epoch
-    running_loss = 0.0
+    # Track the total training loss for the current epoch
+    running_train_loss = 0.0
 
-    # Loop through each batch of images and labels
+    # Track the number of correct training predictions
+    train_correct = 0
+
+    # Track the total number of training observations processed
+    train_total = 0
+
+    # Loop through each training batch
     for images, labels in train_loader:
 
-        # Move images and labels to GPU/CPU device
+        # Move images and labels to the GPU/CPU device
         images = images.to(device)
         labels = labels.to(device)
 
-        # Clear old gradients from the previous batch
+        # Clear gradients calculated from the previous batch
         optimizer.zero_grad()
 
-        # Forward pass: generate predictions
+        # Forward pass: generate raw prediction scores from the CNN
         outputs = model(images)
 
-        # Calculate prediction error
+        # Calculate the classification error for the current batch
         loss = criterion(outputs, labels)
 
-        # Backward pass: calculate gradients
+        # Backward pass: calculate gradients for all trainable model parameters
         loss.backward()
 
-        # Update model weights
+        # Update model weights using the calculated gradients
         optimizer.step()
 
-        # Add batch loss to running loss
-        running_loss = running_loss + loss.item()
+        # Add the current batch loss to the running training loss
+        running_train_loss = running_train_loss + loss.item()
 
-    # Calculate average loss for the epoch
-    average_loss = running_loss / len(train_loader)
+        # Select the class with the highest prediction score
+        _, predicted = torch.max(outputs, 1)
 
-    print('Epoch ' + str(epoch + 1) + '/' + str(num_epochs) + ' - Loss: ' + str(round(average_loss, 4)))
+        # Add the number of images in this batch to the total
+        train_total = train_total + labels.size(0)
 
-# Set model to evaluation mode
+        # Count how many predictions matched the actual labels
+        train_correct = train_correct + (predicted == labels).sum().item()
+
+    # Calculate the average training loss across all batches
+    train_loss = running_train_loss / len(train_loader)
+
+    # Calculate training accuracy
+    train_accuracy = 100 * train_correct / train_total
+
+    # ===================== Validation Phase =====================
+
+    # Switch the CNN into evaluation mode:
+    # This disables Dropout and prevents BatchNorm statistics from being updated using validation observations.
+    model.eval()
+
+    # Track the total validation loss
+    running_validation_loss = 0.0
+
+    # Track the number of correct validation predictions
+    validation_correct = 0
+
+    # Track the total number of validation observations
+    validation_total = 0
+
+    # Disable gradient calculations because validation data - *must never update the model weights*.
+    with torch.no_grad():
+
+        # Loop through each validation batch
+        for images, labels in validation_loader:
+
+            # Move validation data to the GPU/CPU device
+            images = images.to(device)
+            labels = labels.to(device)
+
+            # Generate predictions
+            outputs = model(images)
+
+            # Calculate validation loss
+            loss = criterion(outputs, labels)
+
+            # Add the current batch loss to the running validation loss
+            running_validation_loss = running_validation_loss + loss.item()
+
+            # Select the class with the highest prediction score
+            _, predicted = torch.max(outputs, 1)
+
+            # Add the number of validation observations
+            validation_total = validation_total + labels.size(0)
+
+            # Count correct validation predictions
+            validation_correct = (validation_correct + (predicted == labels).sum().item())
+
+    # Calculate the average validation loss
+    validation_loss = (running_validation_loss / len(validation_loader))
+
+    # Calculate validation accuracy
+    validation_accuracy = (100 * validation_correct / validation_total)
+
+    # ===================== Epoch Summary =====================
+    print('Epoch ' + str(epoch + 1) + '/' + str(num_epochs)
+        + ' | Train Loss: ' + str(round(train_loss, 4)) + ' | Train Accuracy: ' + str(round(train_accuracy, 2))
+        + '% | Validation Loss: ' + str(round(validation_loss, 4))
+        + ' | Validation Accuracy: '
+        + str(round(validation_accuracy, 2)) + '%')
+
+    # ===================== Early Stopping =====================
+    # Choose the Epoch with the highest validation accuracy first,
+    # But, if accuracy ties between two Epochs, choose the model with the lower validation loss.
+    if (validation_accuracy > best_validation_accuracy or
+    (validation_accuracy == best_validation_accuracy and validation_loss < best_validation_loss)):
+
+        # Store the new best validation accuracy and loss
+        best_validation_accuracy = validation_accuracy
+        best_validation_loss = validation_loss
+
+        # Reset the early stopping counter because the model improved
+        epochs_without_improvement = 0
+
+        # Save a copy of the current model weights:
+        # These weights represent the best-performing model (i.e., the model that has produced the highest validation accuracy)
+        best_model_weights = {key: value.detach().cpu().clone()
+            for key, value in model.state_dict().items()}
+
+        print('Validation accuracy improved - best model updated.')
+
+    else:
+
+        # Validation accuracy did not improve, so increase the early stopping counter.
+        epochs_without_improvement = (epochs_without_improvement + 1)
+
+        print('Validation accuracy did not improve. Early stopping counter: ' + str(epochs_without_improvement)
+            + '/' + str(early_stopping_patience))
+
+    # Stop training once validation accuracy has failed to improve for the specified number of consecutive epochs.
+    if epochs_without_improvement >= early_stopping_patience:
+
+        print('Early stopping triggered after epoch ' + str(epoch + 1) + '.')
+        break
+
+# ===================== Restore Best Model =====================
+
+# Restore the model weights from the epoch that produced the highest validation accuracy.
+if best_model_weights is not None:
+
+    # Load the best-performing model weights
+    model.load_state_dict(best_model_weights)
+
+    # Move the restored model back onto the selected GPU/CPU device
+    model = model.to(device)
+
+    print('Best model restored with validation accuracy: ' + str(round(best_validation_accuracy, 2)) + '%'
+           + ' and validation loss: ' + str(round(best_validation_loss, 4)))
+
+# ===================== Final Testing & Analysis =====================
+# Set the model to evaluation mode
 model.eval()
 
 # Initialize counters for correct predictions and total observations
 correct = 0
 total = 0
 
-# Turn off gradient calculations during testing
+# Initialize empty lists to store the actual and predicted class labels
+y_test = []
+y_pred = []
+
+# Turn off gradient calculations because testing does not update model weights
 with torch.no_grad():
 
     # Loop through each batch in the testing DataLoader
     for images, labels in test_loader:
 
-        # Move images and labels to GPU/CPU device
+        # Move images and labels to the GPU/CPU device
         images = images.to(device)
         labels = labels.to(device)
 
-        # Generate model predictions
+        # Generate model prediction scores
         outputs = model(images)
 
         # Select the class with the highest prediction score
         _, predicted = torch.max(outputs, 1)
 
-        # Count total labels
+        # Add the number of observations in the current batch
         total = total + labels.size(0)
 
-        # Count correct predictions
+        # Count how many predictions matched the actual labels
         correct = correct + (predicted == labels).sum().item()
 
-# Calculate testing accuracy
+        y_test.extend(labels.cpu().numpy())  # Move the actual class labels back to the CPU and store them in a list
+        y_pred.extend(predicted.cpu().numpy())  # Move the predicted class labels back to the CPU and store them in a list
+
+# Calculate the final testing accuracy
 test_accuracy = 100 * correct / total
 
+# Display final testing results
 print('Correct Predictions: ' + str(correct))
 print('Total Predictions: ' + str(total))
 print('Test Accuracy: ' + str(round(test_accuracy, 2)) + '%')
 
+# ===================== Confusion Matrix =====================
+
 # Use the "try" flow control argument to "try" and generate our confusion matrix
 try:
-    # Set model to evaluation mode
-    model.eval()
-
-    # Initialize empty lists to store actual and predicted labels
-    y_test = []
-    y_pred = []
-
-    # Turn off gradient calculations during testing
-    with torch.no_grad():
-
-        # Loop through each batch in the testing DataLoader
-        for images, labels in test_loader:
-
-            # Move images and labels to GPU/CPU device
-            images = images.to(device)
-            labels = labels.to(device)
-
-            # Generate model prediction scores
-            outputs = model(images)
-
-            # Select the class with the highest score as the prediction
-            _, predicted = torch.max(outputs, 1)
-
-            # Move labels and predictions back to CPU and store them
-            y_test.extend(labels.cpu().numpy())
-            y_pred.extend(predicted.cpu().numpy())
-
-    # Create a confusion matrix comparing the true labels and predicted labels
+    # Create a confusion matrix comparing the actual and predicted labels
     cm = confusion_matrix(y_test, y_pred)
 
     # Create the confusion matrix display
     cm_display = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
+    cm_display.plot() # Plot a confusion matrix
+    plt.title('Confusion Matrix - CNN Model') # Set the title
+    plt.show() # Display the confusion matrix
 
-    # Plot the confusion matrix
-    cm_display.plot()
-
-    # Set the title of the confusion matrix
-    plt.title('Confusion Matrix - CNN Model')
-
-    # Print summary statistics again:
-    print('Correct Predictions: ' + str(correct))
-    print('Total Predictions: ' + str(total))
-    print('Test Accuracy: ' + str(round(test_accuracy, 2)) + '%' + '\n')
-
-    # Display the confusion matrix plot
-    plt.show()
-
-# Handle any errors that may occur during prediction or evaluation
+# Handle any errors that may occur during confusion matrix generation
 except Exception as ex:
-    # Print an error message if any occur
-    print('Error occurred during model evaluation: ' + str(ex))
+    # Print an error message if one occurs
+    print('Error occurred while generating the confusion matrix: ' + str(ex))
